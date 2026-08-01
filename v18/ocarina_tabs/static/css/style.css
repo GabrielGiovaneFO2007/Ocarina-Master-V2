@@ -1,0 +1,344 @@
+@font-face {
+  font-family: "Ocarina";
+  src: url("../fonts/Open-12-Hole-Ocarina-1.ttf") format("truetype");
+}
+
+:root {
+  --bg: #0e0e0e;
+  --surface: #181818;
+  --surface-2: #222;
+  --border: #2c2c2c;
+  --text: #ccc;
+  --text-bright: #f0f0f0;
+  --muted: #555;
+  --accent: #383838;
+  --accent-hover: #484848;
+  --danger: #b33030;
+  --danger-hover: #d04040;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { background: var(--bg); }
+
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ================ HEADER (fixed, auto-hide) ================ */
+
+header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 14px;
+  transition: transform .25s ease;
+}
+
+header.hidden { transform: translateY(-100%); }
+
+h1 {
+  font-size: .95rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.note-icon { font-size: 1rem; }
+
+.header-title-input {
+  flex: 1;
+  min-width: 0;
+  font-size: .95rem;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text-bright);
+  outline: none;
+}
+.header-title-input:focus { border-color: var(--muted); }
+
+.header-controls { display: flex; gap: 6px; margin-left: auto; }
+
+/* ================ BUTTONS ================ */
+
+.btn {
+  font-family: inherit;
+  font-size: .78rem;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  transition: background .12s;
+}
+.btn:hover { background: var(--accent-hover); }
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text);
+  padding: 7px 8px;
+}
+.btn-ghost:hover { background: var(--accent); }
+
+.btn-accent { background: var(--accent); color: var(--text-bright); border-color: var(--accent); }
+.btn-accent:hover { background: var(--accent-hover); }
+
+.btn-danger { background: transparent; color: var(--danger); border-color: var(--danger); }
+.btn-danger:hover { background: var(--danger); color: #fff; }
+
+/* ================ MAIN ================ */
+
+main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 60px 12px 24px;
+}
+
+@media (min-width: 769px) {
+  #sheet-view {
+    max-width: none;
+    width: 100%;
+    margin: 0;
+  }
+}
+
+/* ================ LIBRARY ================ */
+
+.toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  align-items: center;
+}
+
+#search-bar {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text-bright);
+  font-family: inherit;
+  font-size: .88rem;
+  outline: none;
+}
+#search-bar::placeholder { color: var(--muted); }
+#search-bar:focus { border-color: var(--muted); }
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+@media (max-width: 520px) { .card-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 340px) { .card-grid { grid-template-columns: 1fr; } }
+
+.song-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 10px;
+  cursor: pointer;
+  transition: border-color .15s;
+}
+.song-card:hover { border-color: var(--muted); }
+.song-card .card-title { font-weight: 600; font-size: .82rem; color: var(--text-bright); margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.song-card .card-meta { font-size: .68rem; color: var(--muted); }
+
+.card-preview {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+  overflow: hidden;
+}
+.card-preview svg { max-width: 100%; height: auto; }
+.empty-state { text-align: center; color: var(--muted); margin-top: 40px; font-size: .88rem; }
+
+.header-actions { display: flex; gap: 4px; }
+
+/* ================ READER MODE ================ */
+
+.reader-view {
+  display: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 14px;
+}
+body:not(.creator-mode) .reader-view { display: block; }
+body.creator-mode .reader-view { display: none; }
+
+/* When it holds the desktop multi-page layout, let the pages carry their
+   own borders instead of nesting inside this outer box. */
+.reader-view:has(.reader-scroll) {
+  border: none;
+  background: none;
+  padding: 0;
+}
+
+.reader-column { width: 100%; }
+.empty-note { color: var(--muted); font-style: italic; font-size: .85rem; }
+
+/* Desktop: pages sit in a single horizontally-scrolling row, flush to
+   the left edge of the screen. Vertical scrolling is disabled here so
+   only the horizontal scrollbar ever shows. */
+.reader-scroll {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.reader-page {
+  flex: 0 0 700px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 5px;
+  background: var(--surface);
+}
+
+.score-wrap { position: relative; padding-top: 10px; }
+
+.glyph-layer {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+}
+
+.glyph-box {
+  position: absolute;
+  font-family: "Ocarina", sans-serif;
+  font-size: 25px;
+  line-height: 0.5;
+  color: var(--text);
+  transform: translateX(-50%);
+}
+
+@media (max-width: 480px) { .glyph-box { font-size: 16px; } }
+
+/* ================ CREATOR MODE ================ */
+
+.creator-view {
+  display: none;
+  gap: 12px;
+}
+body.creator-mode .creator-view { display: flex; flex-direction: column; }
+
+.creator-left,
+.creator-right {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 12px;
+}
+
+.pane-label {
+  font-size: .7rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+
+.virtual-keyboard {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.key-btn {
+  font-family: "Ocarina", sans-serif;
+  font-size: 4rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  cursor: pointer;
+  padding: 5px 0px;
+  transition: background .1s;
+}
+.key-btn:hover { background: var(--accent); border-color: var(--muted); }
+.key-btn:active { background: var(--accent-hover); }
+
+#abc-editor {
+  width: 100%;
+  min-height: 110px;
+  font-family: "SF Mono", "Fira Code", "Courier New", monospace;
+  font-size: .85rem;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text-bright);
+  resize: vertical;
+  outline: none;
+}
+#abc-editor:focus { border-color: var(--muted); }
+
+#livePreview .score-wrap { margin-bottom: 8px; }
+
+/* ================ abcjs dark overrides ================ */
+
+.abcjs-container svg text,
+.abcjs-container svg tspan { fill: var(--text) !important; }
+
+.abcjs-container .abcjs-staff-line,
+.abcjs-container .abcjs-staff {
+  stroke: #3a3a3a !important;
+}
+
+.abcjs-container .abcjs-notehead { fill: var(--text-bright) !important; }
+.abcjs-container .abcjs-stem { stroke: var(--text) !important; }
+.abcjs-container .abcjs-barline { stroke: #444 !important; }
+.abcjs-container .abcjs-slur { stroke: #666 !important; fill: none !important; }
+.abcjs-container .abcjs-l { stroke: #444 !important; }
+
+/* ================ TOAST ================ */
+
+#toast {
+  visibility: hidden;
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface-2);
+  color: var(--text-bright);
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  opacity: 0;
+  transition: opacity .2s;
+  font-size: .8rem;
+  z-index: 200;
+}
+#toast.show { visibility: visible; opacity: 1; }

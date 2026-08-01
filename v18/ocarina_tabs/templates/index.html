@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% if mode == 'sheet' %}{{ song.title }} &mdash; Ocarina Tabs{% else %}Ocarina Tab Sheet Library{% endif %}</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/abcjs/6.4.4/abcjs-basic-min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link rel="stylesheet" href="{{ url_for('ocarina.static', filename='css/style.css') }}">
+</head>
+<body data-initial-creator-mode="{{ 'true' if creator_mode else 'false' }}"
+      data-password-required="{{ 'true' if password_required else 'false' }}"
+      class="{{ 'creator-mode' if creator_mode else '' }}">
+
+<header>
+  {% if mode == 'sheet' %}
+    <a class="btn btn-ghost" href="{{ url_for('ocarina.index') }}">&larr;</a>
+    <input type="text" id="song-title-input" class="header-title-input"
+           value="{{ song.title }}" placeholder="Song title">
+  {% else %}
+    <h1><span class="note-icon">&#9835;</span> Ocarina Tab Sheet</h1>
+  {% endif %}
+  {% if mode == 'sheet' %}
+  <div class="header-actions">
+    <button class="btn btn-ghost" id="saveBtn">Save</button>
+    <button class="btn btn-ghost" id="newBtn">+ New</button>
+    <button class="btn btn-ghost" id="exportBtn">PDF</button>
+    <button class="btn btn-ghost btn-danger" id="deleteBtn">Del</button>
+  </div>
+  {% endif %}
+  <button class="btn btn-ghost" id="creatorModeBtn">
+    {{ 'Creator: ON' if creator_mode else 'Creator: OFF' }}
+  </button>
+</header>
+
+{# ================================================================ #}
+{# LIBRARY MODE                                                     #}
+{# ================================================================ #}
+{% if mode == 'library' %}
+<main id="library-view">
+  <div class="toolbar">
+    <input type="text" id="search-bar" placeholder="Search songs...">
+    <a class="btn btn-accent" href="{{ url_for('ocarina.sheet', title='New Song') }}?action=new">+ New</a>
+  </div>
+  <div class="card-grid" id="card-grid"></div>
+  <p class="empty-state" id="empty-state" style="display:none">No songs match your search.</p>
+</main>
+
+<script>window.__SONGS__ = {{ songs | tojson | safe }};</script>
+
+{# ================================================================ #}
+{# SHEET MODE                                                       #}
+{# ================================================================ #}
+{% elif mode == 'sheet' %}
+<main id="sheet-view">
+  <div class="reader-view" id="readerView">
+    <div class="reader-column" id="readerColumn"></div>
+  </div>
+
+  <div class="creator-view" id="creatorView">
+    <div class="creator-left">
+      <div class="pane-label">Virtual Keyboard</div>
+      <div class="virtual-keyboard" id="virtualKeyboard"></div>
+      <div class="pane-label">ABC Notes (one phrase per line)</div>
+      <textarea id="abc-editor" spellcheck="false" placeholder="C D E F G ...">{{ song.raw_abc }}</textarea>
+    </div>
+    <div class="creator-right">
+      <div class="pane-label">Live Preview</div>
+      <div id="livePreview"></div>
+    </div>
+  </div>
+</main>
+
+<script>window.__SONG__ = {{ song | tojson | safe }};</script>
+{% endif %}
+
+<div id="toast"></div>
+
+<script src="{{ url_for('ocarina.static', filename='js/script.js') }}"></script>
+</body>
+</html>
