@@ -1,11 +1,21 @@
+"""
+Ocarina Tab Sheet - Flask blueprint.
+Library + editor for ABC-notation ocarina tabs, with a reader/creator
+mode split and MySQL persistence. PDF export happens client-side
+(captures the rendered staff+glyphs directly) - see static/js/script.js.
+"""
+
 import os
-import sqlite3
 import hmac
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from urllib.parse import unquote
 
+import mysql.connector
+from dotenv import load_dotenv
 from flask import Blueprint, render_template, request, jsonify, session
+
+load_dotenv()
 
 # ---------------------------------------------------------------------------
 # Blueprint + paths
@@ -20,7 +30,6 @@ ocarina_bp = Blueprint(
 )
 
 MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(MODULE_DIR, 'songs.db')
 
 
 # ---------------------------------------------------------------------------
@@ -28,38 +37,46 @@ DB_PATH = os.path.join(MODULE_DIR, 'songs.db')
 # ---------------------------------------------------------------------------
 
 @contextmanager
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
+def get_db(dictionary=True):
+    """Context manager yielding (conn, cursor). Commits on success,
+    rolls back on any exception, always closes the cursor/connection."""
+    conn = mysql.connector.connect(
+        host=os.getenv("DB_HOST"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        database=os.getenv("DB_NAME"),
+    )
+    cursor = conn.cursor(dictionary=dictionary)
     try:
-        yield conn
+        yield conn, cursor
         conn.commit()
     except Exception:
         conn.rollback()
         raise
     finally:
+        cursor.close()
         conn.close()
 
 
 def init_db():
-    with get_db() as conn:
-        conn.execute('''
+    with get_db() as (conn, cursor):
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS songs (
-                id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                title         TEXT    UNIQUE NOT NULL,
-                raw_abc       TEXT    NOT NULL,
-                created_at    TEXT    NOT NULL,
-                updated_at    TEXT    NOT NULL
+                id            INT AUTO_INCREMENT PRIMARY KEY,
+                title         VARCHAR(255) UNIQUE NOT NULL,
+                raw_abc       MEDIUMTEXT NOT NULL,
+                created_at    DATETIME NOT NULL,
+                updated_at    DATETIME NOT NULL
             )
         ''')
-        count = conn.execute('SELECT COUNT(*) AS n FROM songs').fetchone()['n']
+        cursor.execute('SELECT COUNT(*) AS n FROM songs')
+        count = cursor.fetchone()['n']
         if count == 0:
-            now = datetime.now(timezone.utc).isoformat()
+            now = datetime.now(timezone.utc)
             default_abc = "C D E F G A B c\nc B A G F E D C\n"
-            conn.execute(
+            cursor.execute(
                 'INSERT INTO songs (title, raw_abc, created_at, updated_at) '
-                'VALUES (?, ?, ?, ?)',
+                'VALUES (%s, %s, %s, %s)',
                 ("Ocarina Warm-Up", default_abc, now, now)
             )
 
@@ -77,12 +94,12 @@ def _is_creator_mode():
 
 @ocarina_bp.route('/')
 def index():
-    with get_db() as conn:
-        rows = conn.execute(
+    with get_db() as (conn, cursor):
+        cursor.execute(
             'SELECT id, title, raw_abc, created_at, updated_at '
             'FROM songs ORDER BY updated_at DESC'
-        ).fetchall()
-    songs = [dict(r) for r in rows]
+        )
+        songs = cursor.fetchall()
     return render_template('index.html', mode='library', songs=songs,
                             creator_mode=_is_creator_mode(),
                             password_required=bool(os.getenv("ADMIN_PASSWORD")))
@@ -93,20 +110,25 @@ def sheet(title):
     decoded = unquote(title)
     create_new = request.args.get('action') == 'new'
 
-    with get_db() as conn:
-        row = conn.execute('SELECT * FROM songs WHERE title = ?', (decoded,)).fetchone()
+    if create_new and not _is_creator_mode():
+        return 'Creator mode required to create songs', 403
+
+    with get_db() as (conn, cursor):
+        cursor.execute('SELECT * FROM songs WHERE title = %s', (decoded,))
+        row = cursor.fetchone()
         if row is None:
             if not create_new:
                 return 'Song not found', 404
-            now = datetime.now(timezone.utc).isoformat()
-            cur = conn.execute(
+            now = datetime.now(timezone.utc)
+            cursor.execute(
                 'INSERT INTO songs (title, raw_abc, created_at, updated_at) '
-                'VALUES (?, ?, ?, ?)',
+                'VALUES (%s, %s, %s, %s)',
                 (decoded, "", now, now)
             )
-            row = conn.execute('SELECT * FROM songs WHERE id = ?', (cur.lastrowid,)).fetchone()
+            cursor.execute('SELECT * FROM songs WHERE id = %s', (cursor.lastrowid,))
+            row = cursor.fetchone()
 
-    return render_template('index.html', mode='sheet', song=dict(row),
+    return render_template('index.html', mode='sheet', song=row,
                             creator_mode=_is_creator_mode(),
                             password_required=bool(os.getenv("ADMIN_PASSWORD")))
 
@@ -148,6 +170,8 @@ def disable_creator_mode():
 
 @ocarina_bp.route('/api/sheet/save', methods=['POST'])
 def save_song():
+    if not _is_creator_mode():
+        return jsonify(error='Creator mode required'), 403
     data = request.get_json(force=True)
     title = (data.get('title') or '').strip()
     raw_abc = data.get('raw_abc', '')
@@ -156,32 +180,32 @@ def save_song():
     if not title:
         return jsonify(error='Title is required'), 400
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
 
-    with get_db() as conn:
+    with get_db() as (conn, cursor):
         if song_id is None:
-            exists = conn.execute('SELECT id FROM songs WHERE title = ?', (title,)).fetchone()
-            if exists:
+            cursor.execute('SELECT id FROM songs WHERE title = %s', (title,))
+            if cursor.fetchone():
                 return jsonify(error='Title already exists'), 409
-            cur = conn.execute(
+            cursor.execute(
                 'INSERT INTO songs (title, raw_abc, created_at, updated_at) '
-                'VALUES (?, ?, ?, ?)',
+                'VALUES (%s, %s, %s, %s)',
                 (title, raw_abc, now, now)
             )
-            return jsonify(id=cur.lastrowid, title=title), 200
+            return jsonify(id=cursor.lastrowid, title=title), 200
 
-        existing = conn.execute('SELECT id FROM songs WHERE id = ?', (song_id,)).fetchone()
-        if not existing:
+        cursor.execute('SELECT id FROM songs WHERE id = %s', (song_id,))
+        if not cursor.fetchone():
             return jsonify(error='Song not found'), 404
 
-        conflict = conn.execute(
-            'SELECT id FROM songs WHERE title = ? AND id != ?', (title, song_id)
-        ).fetchone()
-        if conflict:
+        cursor.execute(
+            'SELECT id FROM songs WHERE title = %s AND id != %s', (title, song_id)
+        )
+        if cursor.fetchone():
             return jsonify(error='Title already exists'), 409
 
-        conn.execute(
-            'UPDATE songs SET title=?, raw_abc=?, updated_at=? WHERE id=?',
+        cursor.execute(
+            'UPDATE songs SET title=%s, raw_abc=%s, updated_at=%s WHERE id=%s',
             (title, raw_abc, now, song_id)
         )
         return jsonify(id=song_id, title=title), 200
@@ -189,10 +213,12 @@ def save_song():
 
 @ocarina_bp.route('/api/sheet/<path:title>', methods=['DELETE'])
 def delete_song(title):
+    if not _is_creator_mode():
+        return jsonify(error='Creator mode required'), 403
     decoded = unquote(title)
-    with get_db() as conn:
-        row = conn.execute('SELECT id FROM songs WHERE title = ?', (decoded,)).fetchone()
-        if not row:
+    with get_db() as (conn, cursor):
+        cursor.execute('SELECT id FROM songs WHERE title = %s', (decoded,))
+        if not cursor.fetchone():
             return jsonify(success=False, error='Not found'), 404
-        conn.execute('DELETE FROM songs WHERE title = ?', (decoded,))
+        cursor.execute('DELETE FROM songs WHERE title = %s', (decoded,))
     return jsonify(success=True), 200

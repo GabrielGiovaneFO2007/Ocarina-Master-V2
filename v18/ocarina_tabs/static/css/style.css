@@ -73,6 +73,17 @@ h1 {
 }
 .header-title-input:focus { border-color: var(--muted); }
 
+.header-song-title {
+  flex: 1;
+  min-width: 0;
+  font-size: .95rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .header-controls { display: flex; gap: 6px; margin-left: auto; }
 
 /* ================ BUTTONS ================ */
@@ -289,6 +300,28 @@ body.creator-mode .creator-view { display: flex; flex-direction: column; }
 }
 .key-btn:hover { background: var(--accent); border-color: var(--muted); }
 .key-btn:active { background: var(--accent-hover); }
+
+/* Modifier row sits below the note grid */
+.keyboard-modifiers {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.key-btn-action {
+  flex: 1;
+  font-family: inherit;
+  font-size: .8rem;
+  font-weight: 600;
+  padding: 6px 0;
+  text-align: center;
+}
+.key-btn-action.active {
+  background: var(--muted);
+  color: var(--text-bright);
+  border-color: var(--text);
+}
 
 #abc-editor {
   width: 100%;

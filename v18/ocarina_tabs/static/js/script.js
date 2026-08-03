@@ -23,7 +23,7 @@ const SEMITONES = {C:0,D:2,E:4,F:5,G:7,A:9,B:11};
 const NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 
 function abcNoteToName(token) {
-  const m = /^(\^{1,2}|_{1,2}|=)?([A-Ga-g])([,']*)$/.exec(token);
+  const m = /^(\^{1,2}|_{1,2}|=)?([A-Ga-g])([,']*)(\d*(?:\/\d*)?)$/.exec(token);
   if (!m) return null;
   const [, acc, letter, oct] = m;
   let semitone = SEMITONES[letter.toUpperCase()];
@@ -107,9 +107,18 @@ function renderScore(container, tokens, barAfterSet, staffwidth) {
 
   if (topLines.length === 0) return { contentHeight: 0, rows: [] };
 
+  // Build a mapping from notehead position to actual token index,
+  // skipping rests (z) and any other tokens that don't produce a notehead.
+  const noteTokenMap = [];
+  tokens.forEach((tok, i) => {
+    if (abcNoteToName(tok)) noteTokenMap.push(i);
+  });
+
   const noteheads = [...wrap.querySelectorAll(".abcjs-notehead")];
   const rows = topLines.map(() => []);
-  noteheads.forEach((el, tokenIndex) => {
+  noteheads.forEach((el, noteheadIdx) => {
+    if (noteheadIdx >= noteTokenMap.length) return;
+    const tokenIndex = noteTokenMap[noteheadIdx];
     const y = el.getBoundingClientRect().top - wrapRect.top;
     let rowIdx = 0;
     for (let r = 0; r < topLines.length; r++) {
@@ -129,12 +138,13 @@ function renderScore(container, tokens, barAfterSet, staffwidth) {
     rowNotes.forEach(({ el, tokenIndex }) => {
       const name = abcNoteToName(tokens[tokenIndex]);
       const glyph = name && NOTE_TO_GLYPH[name];
+      if (!glyph) return;
       const x = el.getBoundingClientRect().left + el.getBoundingClientRect().width / 2 - wrapRect.left;
       const box = document.createElement("div");
       box.className = "glyph-box";
       box.style.left = x + "px";
       box.style.top = rowGlyphTop + "px";
-      box.textContent = glyph || "?";
+      box.textContent = glyph;
       glyphLayer.appendChild(box);
     });
     rowInfo.push({
@@ -153,7 +163,7 @@ function tokensFromLines(rawAbc) {
   const tokens = [];
   const barAfterSet = new Set();
   rawAbc.split("\n").map(l => l.trim()).filter(Boolean).forEach(line => {
-    const lineTokens = line.split(/\s+/).filter(t => /^[\^_=]{0,2}[A-Ga-g][,']*$/.test(t));
+    const lineTokens = line.split(/\s+/).filter(t => /^(?:z|[\^_=]{0,2}[A-Ga-g][,']*(?:\d*(?:\/\d*)?)?)$/.test(t));
     tokens.push(...lineTokens);
     if (tokens.length > 0) barAfterSet.add(tokens.length - 1);
   });
@@ -346,6 +356,32 @@ function initCreatorView(song) {
   const preview = document.getElementById("livePreview");
   if (!keyboard || !editor) return;
 
+  // --- shared token insertion helper ---
+  let durationModifier = "";
+  let longBtn, shortBtn;
+
+  function insertToken(token) {
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    const before = editor.value.slice(0, start);
+    const after = editor.value.slice(end);
+    const currentLine = before.split("\n").pop() || "";
+    const notesOnLine = currentLine.trim().split(/\s+/).filter(Boolean).length;
+    let insert;
+    if (notesOnLine > 0 && notesOnLine % 9 === 0) {
+      insert = (before.endsWith(" ") ? "" : " ") + token + "\n";
+    } else {
+      insert = (before && !before.endsWith("\n") && !before.endsWith(" ") ? " " : "") + token + " ";
+    }
+    editor.value = before + insert + after;
+    const pos = (before + insert).length;
+    editor.setSelectionRange(pos, pos);
+    editor.focus();
+    renderPreview();
+    scheduleSave();
+  }
+
+  // --- note buttons ---
   KEYBOARD_NOTES.forEach(([name, abcToken]) => {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -353,27 +389,67 @@ function initCreatorView(song) {
     btn.textContent = NOTE_TO_GLYPH[name];
     btn.title = name;
     btn.addEventListener("click", () => {
-      const start = editor.selectionStart;
-      const end = editor.selectionEnd;
-      const before = editor.value.slice(0, start);
-      const after = editor.value.slice(end);
-      const currentLine = before.split("\n").pop() || "";
-      const notesOnLine = currentLine.trim().split(/\s+/).filter(Boolean).length;
-      let insert;
-      if (notesOnLine > 0 && notesOnLine % 9 === 0) {
-        insert = (before.endsWith(" ") ? "" : " ") + abcToken + "\n";
-      } else {
-        insert = (before && !before.endsWith("\n") && !before.endsWith(" ") ? " " : "") + abcToken + " ";
-      }
-      editor.value = before + insert + after;
-      const pos = (before + insert).length;
-      editor.setSelectionRange(pos, pos);
-      editor.focus();
-      renderPreview();
-      scheduleSave();
+      const token = abcToken + durationModifier;
+      durationModifier = "";
+      if (longBtn) longBtn.classList.remove("active");
+      if (shortBtn) shortBtn.classList.remove("active");
+      insertToken(token);
     });
     keyboard.appendChild(btn);
   });
+
+  // --- duration modifier row ---
+  const modifierRow = document.createElement("div");
+  modifierRow.className = "keyboard-modifiers";
+
+  // Rest button
+  const restBtn = document.createElement("button");
+  restBtn.type = "button";
+  restBtn.className = "key-btn key-btn-action";
+  restBtn.textContent = "\u{1D13E}";
+  restBtn.title = "Rest (silence)";
+  restBtn.addEventListener("click", () => {
+    insertToken("z");
+  });
+  modifierRow.appendChild(restBtn);
+
+  // Long note toggle
+  longBtn = document.createElement("button");
+  longBtn.type = "button";
+  longBtn.className = "key-btn key-btn-action";
+  longBtn.textContent = "Long";
+  longBtn.title = "Long note (double duration)";
+  longBtn.addEventListener("click", () => {
+    if (durationModifier === "2") {
+      durationModifier = "";
+      longBtn.classList.remove("active");
+    } else {
+      durationModifier = "2";
+      longBtn.classList.add("active");
+      if (shortBtn) shortBtn.classList.remove("active");
+    }
+  });
+  modifierRow.appendChild(longBtn);
+
+  // Short note toggle
+  shortBtn = document.createElement("button");
+  shortBtn.type = "button";
+  shortBtn.className = "key-btn key-btn-action";
+  shortBtn.textContent = "Short";
+  shortBtn.title = "Short note (half duration)";
+  shortBtn.addEventListener("click", () => {
+    if (durationModifier === "/") {
+      durationModifier = "";
+      shortBtn.classList.remove("active");
+    } else {
+      durationModifier = "/";
+      shortBtn.classList.add("active");
+      if (longBtn) longBtn.classList.remove("active");
+    }
+  });
+  modifierRow.appendChild(shortBtn);
+
+  keyboard.appendChild(modifierRow);
 
   function renderPreview() {
     if (!preview) return;
@@ -384,6 +460,7 @@ function initCreatorView(song) {
 
   let saveTimer = null;
   function scheduleSave() {
+    if (!document.body.classList.contains("creator-mode")) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(saveSong, 700);
   }
@@ -403,6 +480,7 @@ function initCreatorView(song) {
 let currentSong = null;
 
 async function saveSong() {
+  if (!document.body.classList.contains("creator-mode")) return;
   const titleInput = document.getElementById("song-title-input");
   const editor = document.getElementById("abc-editor");
   if (!titleInput || !currentSong) return;

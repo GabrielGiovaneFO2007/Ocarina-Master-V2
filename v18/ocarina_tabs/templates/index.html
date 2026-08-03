@@ -16,17 +16,25 @@
 <header>
   {% if mode == 'sheet' %}
     <a class="btn btn-ghost" href="{{ url_for('ocarina.index') }}">&larr;</a>
+    {% if creator_mode %}
     <input type="text" id="song-title-input" class="header-title-input"
            value="{{ song.title }}" placeholder="Song title">
+    {% else %}
+    <span class="header-song-title">{{ song.title }}</span>
+    {% endif %}
   {% else %}
     <h1><span class="note-icon">&#9835;</span> Ocarina Tab Sheet</h1>
   {% endif %}
-  {% if mode == 'sheet' %}
+  {% if mode == 'sheet' and creator_mode %}
   <div class="header-actions">
     <button class="btn btn-ghost" id="saveBtn">Save</button>
     <button class="btn btn-ghost" id="newBtn">+ New</button>
     <button class="btn btn-ghost" id="exportBtn">PDF</button>
     <button class="btn btn-ghost btn-danger" id="deleteBtn">Del</button>
+  </div>
+  {% elif mode == 'sheet' %}
+  <div class="header-actions">
+    <button class="btn btn-ghost" id="exportBtn">PDF</button>
   </div>
   {% endif %}
   <button class="btn btn-ghost" id="creatorModeBtn">
@@ -41,7 +49,9 @@
 <main id="library-view">
   <div class="toolbar">
     <input type="text" id="search-bar" placeholder="Search songs...">
+    {% if creator_mode %}
     <a class="btn btn-accent" href="{{ url_for('ocarina.sheet', title='New Song') }}?action=new">+ New</a>
+    {% endif %}
   </div>
   <div class="card-grid" id="card-grid"></div>
   <p class="empty-state" id="empty-state" style="display:none">No songs match your search.</p>
